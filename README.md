@@ -1,0 +1,1 @@
+# NET8-RabbitMQ.Message
