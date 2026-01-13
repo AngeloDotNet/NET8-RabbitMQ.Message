@@ -5,8 +5,8 @@ namespace RabbitMQ.Messaging;
 
 public static class RabbitMQExtensions
 {
-    public static IMessagingBuilder AddRabbitMq(this IServiceCollection services,
-        Action<MessageManagerSettings> messageManagerConfiguration, Action<QueueSettings> queuesConfiguration)
+    public static IMessagingBuilder AddRabbitMq(this IServiceCollection services, Action<MessageManagerSettings> messageManagerConfiguration,
+        Action<QueueSettings> queuesConfiguration)
     {
         services.AddSingleton<MessageManager>();
         services.AddSingleton<IMessageSender>(provider => provider.GetService<MessageManager>()!);
@@ -22,7 +22,8 @@ public static class RabbitMQExtensions
         return new DefaultMessagingBuilder(services);
     }
 
-    public static IMessagingBuilder AddReceiver<TObject, TReceiver>(this IMessagingBuilder builder) where TObject : class
+    public static IMessagingBuilder AddReceiver<TObject, TReceiver>(this IMessagingBuilder builder)
+        where TObject : class
         where TReceiver : class, IMessageReceiver<TObject>
     {
         builder.Services.AddHostedService<QueueListener<TObject>>();
