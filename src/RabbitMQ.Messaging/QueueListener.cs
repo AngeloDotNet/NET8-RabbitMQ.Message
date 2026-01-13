@@ -1,11 +1,10 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using System.Text;
+using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using RabbitMQ.Messaging.Abstractions;
-using System.Text;
-using System.Text.Json;
 
 namespace RabbitMQ.Messaging;
 
@@ -17,7 +16,8 @@ internal class QueueListener<T> : BackgroundService where T : class
     private readonly IServiceProvider serviceProvider;
     private readonly string queueName;
 
-    public QueueListener(MessageManager messageManager, MessageManagerSettings messageManagerSettings, QueueSettings settings, ILogger<QueueListener<T>> logger, IServiceProvider serviceProvider)
+    public QueueListener(MessageManager messageManager, MessageManagerSettings messageManagerSettings, QueueSettings settings,
+        ILogger<QueueListener<T>> logger, IServiceProvider serviceProvider)
     {
         this.messageManager = messageManager;
         this.messageManagerSettings = messageManagerSettings;
@@ -45,21 +45,20 @@ internal class QueueListener<T> : BackgroundService where T : class
     {
         stoppingToken.ThrowIfCancellationRequested();
 
-        var consumer = new EventingBasicConsumer(messageManager.Channel);
-        consumer.Received += async (_, message) =>
+        var consumer = new AsyncEventingBasicConsumer(messageManager.Channel);
+        consumer.ReceivedAsync += async (_, message) =>
         {
             try
             {
                 logger.LogDebug("Messaged received: {Request}", Encoding.UTF8.GetString(message.Body.Span));
-
                 using var scope = serviceProvider.CreateScope();
 
                 var receiver = scope.ServiceProvider.GetRequiredService<IMessageReceiver<T>>();
                 var response = JsonSerializer.Deserialize<T>(message.Body.Span, messageManagerSettings.JsonSerializerOptions ?? JsonOptions.Default);
+
                 await receiver.ReceiveAsync(response!, stoppingToken);
 
                 messageManager.MarkAsComplete(message);
-
                 logger.LogDebug("Message processed");
             }
             catch (Exception ex)
@@ -71,16 +70,14 @@ internal class QueueListener<T> : BackgroundService where T : class
             stoppingToken.ThrowIfCancellationRequested();
         };
 
-        messageManager.Channel.BasicConsume(queueName, autoAck: false, consumer);
+        messageManager.Channel.BasicConsumeAsync(queueName, false, null!, false, false, null, consumer, stoppingToken);
 
         return Task.CompletedTask;
     }
 
-    public override void Dispose()
+    public async ValueTask DisposeAsync()
     {
-        messageManager.Dispose();
+        await messageManager.DisposeAsync();
         base.Dispose();
-
-        GC.SuppressFinalize(this);
     }
 }
